@@ -8,8 +8,6 @@ import (
 	"os"
 
 	"local/gopro-utils/telemetry"
-	// "telemetry"
-	//"github.com/ryan-williams/gopro-utils/telemetry"
 )
 
 type data struct {
