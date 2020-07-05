@@ -64,6 +64,7 @@ func Read(f io.Reader) (*TELEM, error) {
 		"WNDM",
 		"MWET",
 		"AALP",
+		"FSKP",
 	}
 
 	label := make([]byte, 4, 4) // 4 byte ascii label of data
@@ -85,7 +86,7 @@ func Read(f io.Reader) (*TELEM, error) {
 		label_string := string(label)
 
 		if !stringInSlice(label_string, labels) {
-			err := fmt.Errorf("Could not find label in list: %s (%x)\n", label, label)
+			err := fmt.Errorf("Could not find label in list! %s (%x)\n", label, label)
 			return nil, err
 		}
 
