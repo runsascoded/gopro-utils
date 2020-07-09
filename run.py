@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
 from argparse import ArgumentParser
+from glob import glob
+from itertools import chain
 from os.path import exists
 from pathlib import Path
 import shlex
@@ -13,14 +15,12 @@ def run(*args, dry_run=False, **kwargs):
         print(f'Would run: {shlex.join(args)}')
     else:
         print(f'Running: {shlex.join(args)}')
-        check_call(args)
+        check_call(args, **kwargs)
 
 
 def paths(input, in_xtn, out_xtn):
     input = Path(input)
     extension = input.suffix.lower()
-    if not in_xtn.startswith('.'): in_xtn = '.' + in_xtn
-    if not out_xtn.startswith('.'): out_xtn = '.' + out_xtn
     assert extension == in_xtn
     output = str(input)[:-len(extension)] + out_xtn
     output = Path(output)
@@ -49,7 +49,7 @@ def prep_cmd(base, path, in_xtn, out_xtn, exist_ok, force, *force_args):
     
 
 def mp4_to_gpmd(path, exist_ok=False, force=False, dry_run=False):
-    cmd, input, output = prep_cmd('ffmpeg', path, 'mp4', 'bin', exist_ok, force, '-y')
+    cmd, input, output = prep_cmd('ffmpeg', path, '.mp4', '.gpmd', exist_ok, force, '-y')
     if not cmd: return output
     
     import json
@@ -65,7 +65,13 @@ def mp4_to_gpmd(path, exist_ok=False, force=False, dry_run=False):
             .decode()
         )
     
-    [ gpmd_stream ] = [ stream for stream in streams['streams'] if stream['codec_tag_string'] == 'gpmd' ]
+    gpmd_streams = [ stream for stream in streams['streams'] if stream['codec_tag_string'] == 'gpmd' ]
+    if len(gpmd_streams) == 0:
+        print(f'Skipping {path}: no GPMD streams')
+        return None
+    elif len(gpmd_streams) > 1:
+        raise ValueError(f'Found multiple GPMD streams')
+    [ gpmd_stream ] = gpmd_streams
     gpmd_stream_idx = gpmd_stream['index']
     
     cmd += ['-i',input,'-codec','copy','-map',f'0:{gpmd_stream_idx}','-f','rawvideo',output]
@@ -74,10 +80,20 @@ def mp4_to_gpmd(path, exist_ok=False, force=False, dry_run=False):
 
 
 def gpmd_to_json(path, exist_ok=False, force=False, dry_run=False):
-    cmd, input, output = prep_cmd('/go/bin/gopro2json', path, 'bin', 'json', exist_ok, force)
-    if not cmd: return output
-    cmd += ['-i',input,'-o',output]
-    run(*cmd, dry_run=dry_run)
+    cmd, input, output = prep_cmd('/go/bin/gopro2json', path, '.gpmd', '.json', exist_ok, force)
+    if cmd:
+        cmd += ['-i',input,'-o',output]
+        run(*cmd, dry_run=dry_run)
+    return output
+
+
+def save_metadata(path, exist_ok=False, force=False, dry_run=False):
+    cmd, input, output = prep_cmd('ffprobe', path, '.mp4', '-metadata.json', exist_ok, force)
+    if cmd:
+        cmd += ['-v','error','-show_format','-show_streams','-of','json',input]
+        with output.open('w') as f:
+            run(*cmd, dry_run=dry_run, stdout=f)
+
     return output
 
 
@@ -87,27 +103,23 @@ def process_input(input, exist_ok, force, max_depth, dry_run):
     if input.is_dir():
         if max_depth == -1 or max_depth > 0:
             next_depth = max_depth - 1 if max_depth > 0 else max_depth
-            mp4s = list(input.glob('*.mp4') + input.glob('*.MP4'))
-            print(f'{len(mp4s)} mp4s…')
-            for mp4 in mp4s:
-                process_input(mp4, exist_ok, force, next_depth, dry_run)
+            for child in input.iterdir():
+                if (child.suffix.lower() == '.mp4' and not child.name.startswith('.')) or child.is_dir():
+                    process_input(child, exist_ok, force, next_depth, dry_run)
 
-            gpmds = input.glob('*.gpmd')
-            for gpmd in gpmds:
-                process_input(gpmd, exist_ok, force, next_depth, dry_run)
     elif extension == '.mp4':
         gpmd = mp4_to_gpmd(input, exist_ok, force, dry_run)
+        if not gpmd: return
         json = gpmd_to_json(gpmd, exist_ok, force, dry_run)
-    elif extension == '.gpmd':
-        gpmd = input
-        json = gpmd_to_json(input, exist_ok, force, dry_run)
+        metadata = save_metadata(input, exist_ok, force, dry_run)
     else:
         raise ValueError(f'Unrecognized extension {extension} ({input})')
 
 
 def process_inputs(inputs, exist_ok, force, max_depth, dry_run):
     for input in inputs:
-        process_input(input, exist_ok, force, max_depth, dry_run)
+        for path in glob(input):
+            process_input(path, exist_ok, force, max_depth, dry_run)
 
 
 if __name__ == '__main__':
