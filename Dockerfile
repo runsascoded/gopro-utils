@@ -104,4 +104,6 @@ COPY . /gopro-utils
 WORKDIR /gopro-utils
 RUN go install ./...
 
+ENV PATH="/root/bin:$PATH"
+
 ENTRYPOINT [ "python3", "run.py" ]
