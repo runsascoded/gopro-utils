@@ -51,7 +51,7 @@ func main() {
 
 		// this is pretty useless and info overload: change it to pick a field you want
 		// or mangle it to your wishes into JSON/CSV/format of choice
-		fmt.Println(t)
+		//fmt.Println(t)
 
 		t = &telemetry.TELEM{}
 	}

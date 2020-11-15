@@ -85,6 +85,10 @@ func Read(f io.Reader) (*TELEM, error) {
 
 		label_string := string(label)
 
+		// if "GPSU" == label_string {
+		// fmt.Println(label_string)
+		// }
+		//println(label_string)
 		if !stringInSlice(label_string, labels) {
 			err := fmt.Errorf("Could not find label in list! %s (%x)\n", label, label)
 			return nil, err

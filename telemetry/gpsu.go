@@ -15,7 +15,9 @@ func (gpsu *GPSU) Parse(bytes []byte) error {
 		return errors.New("Invalid length GPSU packet")
 	}
 
-	t, err := time.Parse("060102150405", string(bytes))
+	value := string(bytes)
+	//fmt.Printf("GPSU: %s\n", value)
+	t, err := time.Parse("060102150405", value)
 	if err != nil {
 		return err
 	}
